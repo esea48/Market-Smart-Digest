@@ -1,0 +1,975 @@
+{
+  "name": "market smart digest - MVP",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -2288,
+        16
+      ],
+      "id": "bba7d2eb-3afd-4645-9664-5f1d50e8ee8a",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ \"Weekly Digest — \" + $json.topic + \" — Week of \" + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) }}",
+        "message": "=={{ $json.htmlDigest }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        528,
+        -48
+      ],
+      "id": "b86d201c-d2b8-4844-a326-73b9bb2be12a",
+      "name": "Send a message",
+      "webhookId": "42a0912d-0a1d-457e-8068-fe9d6b0b5670",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QCZMsgq5N0ikVdvz",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B4SSLQAEN",
+          "mode": "id"
+        },
+        "text": "={{ $json.slackSummary }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        528,
+        176
+      ],
+      "id": "d233a08c-e776-46e1-a526-394f2e073a58",
+      "name": "Send a message1",
+      "webhookId": "206fdcdd-62c5-4f78-ad1f-57287c8d8710",
+      "executeOnce": false,
+      "credentials": {
+        "slackApi": {
+          "id": "JYwEcObEICmedNFd",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        1216,
+        -480
+      ],
+      "id": "a2c0a751-ea7d-4531-a3f8-d444c54b1274",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "sendTo": "product.ainow@gmail.com",
+        "subject": " ⚠️ Weely Digest failed",
+        "message": "Weekly Digest workflow failed. Please check your n8n workflow and Tavily/Anthropic API keys.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1456,
+        -480
+      ],
+      "id": "d5660193-3605-4f84-ac1f-283e1d6f6bbc",
+      "name": "Send a message2",
+      "webhookId": "a7c965bb-2652-4271-8c59-e0818128af3e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QCZMsgq5N0ikVdvz",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B4Z30CHGW",
+          "mode": "id"
+        },
+        "text": "⚠️ Weekly Digest workflow failed. Please check your n8n workflow and Tavily/Anthropic API keys.",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        1456,
+        -320
+      ],
+      "id": "95147c98-9602-4ed4-bce1-a7770973a589",
+      "name": "Send a message3",
+      "webhookId": "f9d0dd9a-41ca-4ad9-8582-fdbeab90d877",
+      "credentials": {
+        "slackApi": {
+          "id": "JYwEcObEICmedNFd",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  api_key: \"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\",\n  query: $json.topic + \" industry news trends regulations 2026\",\n  search_depth: \"advanced\",\n  max_results: 10,\n  include_domains: $json.trusted_sources.split(\", \")\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1104,
+        0
+      ],
+      "id": "84ef756c-695d-459c-ad56-5a32e8c41470",
+      "name": "Tavily search",
+      "retryOnFail": true,
+      "waitBetweenTries": 5
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst buildItems = $('Build prompt').all();\n\nreturn items.map((item, i) => {\n  const raw = item.json.content[0].text;\n  const html = raw.replace(/^```html\\n/, '').replace(/\\n```$/, '');\n  const config = buildItems[i]?.json;\n  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });\n\n  const topStoryMatch = raw.match(/TOP_STORY_START\\n(.*?)\\n(.*?)\\n(.*?)\\nTOP_STORY_END/s);\n  \n  let slackSummary;\n  if (topStoryMatch) {\n    const title = topStoryMatch[1].trim();\n    const url = topStoryMatch[2].trim();\n    const summary = topStoryMatch[3].trim();\n    slackSummary = `*${config.topic} Weekly Digest — Week of ${today}*\\n\\n*Top story:* <${url}|${title}>\\n${summary}\\n\\n_Full digest sent to ${config.email} — check your inbox for the complete report._`;\n  } else {\n    const linkMatch = html.match(/<a[^>]+href=\"([^\"]+)\"[^>]*>([^<]+)<\\/a>/);\n    const firstLink = linkMatch ? { url: linkMatch[1], title: linkMatch[2] } : null;\n    slackSummary = firstLink\n      ? `*${config.topic} Weekly Digest — Week of ${today}*\\n\\n*Top story:* <${firstLink.url}|${firstLink.title}>\\n\\n_Full digest sent to ${config.email} — check your inbox for the complete report._`\n      : `*${config.topic} Weekly Digest — Week of ${today}*\\n\\nYour digest is ready.\\n\\n_Full digest sent to ${config.email} — check your inbox._`;\n  }\n\n  const cleanHtml = html.replace(/TOP_STORY_START[\\s\\S]*?TOP_STORY_END/g, '').trim();\n\n  return { json: {\n    htmlDigest: cleanHtml,\n    slackSummary,\n    email: config.email,\n    channel: config.channel,\n    topic: config.topic\n  }};\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        32
+      ],
+      "id": "13338c81-43f9-453a-a6d6-987623349ba0",
+      "name": "Extract HTML"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const {\n    topic, email, channel, regulations, regulation_section_title,\n    companies, watchlist, searchResults, trusted_sources\n  } = item.json;\n  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });\n  const hasRegulations = regulations && regulations.trim().length > 0;\n  const prompt = `You are a research analyst producing a weekly digest for a product manager working in the ${topic} space.\nYou will be given a watchlist containing industries, companies, regulations, and trusted sources. Use these as context to guide your research and analysis.\nProduce the digest in exactly this structure using the search results provided. Return ONLY valid HTML — no markdown, no code fences, no preamble. Use inline styles, max-width 640px, font-family Arial, background #ffffff.\nWatchlist context: ${watchlist}\n---\n${topic} Weekly Digest — Week of ${today}\n{2 sentence themed summary of the week}\n---\n${hasRegulations ? `${regulation_section_title} to watch\n{1 single most urgent regulation or upcoming deadline this week from: ${regulations}}\n---` : ''}\nCompany headlines and feature launches\nFor each of 3 items:\n{Headline title — source url}\nSummary: {3 sentences explaining what happened}\nWhat we can learn: {2 sentences on why this matters for your product}\n---\n${hasRegulations ? `${regulation_section_title} headlines\nFor each of 2 items:\n{Headline title — source url}\nSummary: {3 sentences explaining what happened}\nWhat we can learn: {2 sentences on why this matters for your product}\n---` : ''}\nTrend alert\nFor each of 2 items:\n{2 sentence trend description + link to explore more}\n---\nMarket gap callout\n{2-3 sentences identifying something customers are asking for that no vendor is solving well yet. Be specific.}\nSources: {1-2 links}\n---\nEmerging customer pain\n{2-3 sentences on what ${topic} practitioners are actively frustrated about this week.}\nSources: {1-2 links}\n---\nPM question of the week\n{1 single strategic question worth sitting with this week, grounded in something specific from this digest}\n---\nRules:\n- Always include real links to sources from the search results\n- Never fabricate headlines, URLs, or statistics\n- If a section has insufficient real content, reduce items rather than invent\n- Keep the tone analytical and direct, not journalistic\n- Write from the perspective of a product manager, not a journalist\n- Focus research on the ${topic} industry\n- Pay particular attention to these companies: ${companies}\n${hasRegulations ? `- Monitor these specific regulations: ${regulations}` : '- Skip all regulation sections entirely'}\n- Prioritise content from these trusted sources: ${trusted_sources}\n- At the very bottom of the email, add a small footer with this exact text in a small gray font: \"To unsubscribe, visit [https://ellen-s.n8n.irn.hk/form/137d637e-73f7-4d31-a3a4-5c5e51acd059]\"\n---\nAfter the closing </html> tag, add this block in plain text exactly as shown.\nThis MUST use the same article as the first item under \"Company headlines and feature launches\".\nDo not add any extra lines, labels, or punctuation inside the block.\n\nTOP_STORY_START\n{Title of the first company headline — plain text only, no URL}\n{Full URL of that article — must start with https:// and come from the search results}\n{2 sentence summary of why this story matters for a product manager}\nTOP_STORY_END\n\nSearch results:\n${searchResults}`;\n  return { json: { prompt, email, channel, topic } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        32
+      ],
+      "id": "53a1dcf5-6994-4f9d-a311-0c1025f5dba6",
+      "name": "Build prompt"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst watchlistItems = $('Merge watchlist').all();\n\nreturn items.map((item, i) => {\n  const results = item.json.results || [];\n  const config = watchlistItems[i]?.json || watchlistItems[0].json;\n\n  const searchText = results.map((r, i) =>\n    `[${i+1}] ${r.title}\\n${r.url}\\n${r.content || r.snippet || ''}`\n  ).join('\\n\\n');\n\n  return { json: {\n    topic: config.topic,\n    email: config.email,\n    channel: config.channel,\n    trusted_sources: config.trusted_sources,\n    regulations: config.regulations,\n    regulation_section_title: config.regulation_section_title,\n    companies: config.companies,\n    watchlist: config.watchlist,\n    searchResults: searchText\n  }};\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -912,
+        32
+      ],
+      "id": "63e8d5f7-e20f-4925-b62d-f80898c474ba",
+      "name": "Bundle results"
+    },
+    {
+      "parameters": {
+        "formTitle": "AI Powered Weekly Digest",
+        "formDescription": "For Product Managers - An AI-powered weekly digest that automatically researches, summarizes, and delivers weekly market and competitor digests across multiple industries - via email and slack every Monday at 7 AM.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Industries",
+              "fieldType": "checkbox",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "EdTech"
+                  },
+                  {
+                    "option": "B2B Marketplace"
+                  },
+                  {
+                    "option": "Compliance Tech"
+                  },
+                  {
+                    "option": "FinTech"
+                  },
+                  {
+                    "option": "AI & Machine Learning"
+                  },
+                  {
+                    "option": "HealthTech"
+                  },
+                  {
+                    "option": "FemTech"
+                  },
+                  {
+                    "option": "CleanTech / Climate Tech"
+                  },
+                  {
+                    "option": "CyberSecurity"
+                  },
+                  {
+                    "option": "B2B SaaS"
+                  },
+                  {
+                    "option": "B2B Marketplace"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Other Industry"
+            },
+            {
+              "fieldLabel": "Your email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Slack channel id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -2304,
+        288
+      ],
+      "id": "4b514a37-69ad-4048-9745-1eb8f1807846",
+      "name": "On form submission",
+      "webhookId": "00352fa4-43f1-458b-b5b4-8c827364bf33"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all();\n\nreturn rows.flatMap(row => {\n  const industries = row.json['Industries'].split(',').map(i => i.trim());\n  const email = row.json['Email'];\n  const channel = row.json['Slack channel'] || null;\n  \n  return industries.map(topic => ({\n    json: { topic, email, channel }\n  }));\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1648,
+        96
+      ],
+      "id": "3ecaccde-c01e-4dc5-ac2a-2a1ceceb412a",
+      "name": "Split industries"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1Gx0BT2B7QpQKD7AJ3Jb2XhB0gV-55rrSQsVUJp0wr8I",
+          "mode": "list",
+          "cachedResultName": "Digest Subscribers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Gx0BT2B7QpQKD7AJ3Jb2XhB0gV-55rrSQsVUJp0wr8I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Gx0BT2B7QpQKD7AJ3Jb2XhB0gV-55rrSQsVUJp0wr8I/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $json.email }}",
+            "Slack channel": "={{ $json.channel }}",
+            "Industries": "={{ $json.industries }}",
+            "Active": "Yes"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Slack channel",
+              "displayName": "Slack channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Industries",
+              "displayName": "Industries",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Active",
+              "displayName": "Active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1936,
+        288
+      ],
+      "id": "f8fec2b1-44b1-45f4-b91e-adc7695b44af",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0iw1dXgYp3t0XmZV",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const form = $input.first().json;\nconst selected = form['Industries'] || [];\nconst other = form['Other Industry'] ? [form['Other Industry']] : [];\nconst allIndustries = [...selected, ...other].join(', ');\n\nreturn [{ json: {\n  email: form['Your email'],\n  channel: form['Slack channel id'] || '',\n  industries: allIndustries,\n  active: 'Yes'\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2128,
+        288
+      ],
+      "id": "c04404ee-8dd7-45c3-a930-c22ce25573b6",
+      "name": "Prepare subscriber"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1Gx0BT2B7QpQKD7AJ3Jb2XhB0gV-55rrSQsVUJp0wr8I",
+          "mode": "list",
+          "cachedResultName": "Digest Subscribers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Gx0BT2B7QpQKD7AJ3Jb2XhB0gV-55rrSQsVUJp0wr8I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Gx0BT2B7QpQKD7AJ3Jb2XhB0gV-55rrSQsVUJp0wr8I/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Active",
+              "lookupValue": "Yes"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2016,
+        16
+      ],
+      "id": "e33692e8-f3f9-4868-9d76-b43d941f2947",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0iw1dXgYp3t0XmZV",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1AiRxviIos1JgHPPgiFaiZsS5VYfj_jEPSVOHdkOgnc8",
+          "mode": "list",
+          "cachedResultName": "Market Digest Config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1AiRxviIos1JgHPPgiFaiZsS5VYfj_jEPSVOHdkOgnc8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 68835384,
+          "mode": "list",
+          "cachedResultName": "Market Digest Config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1AiRxviIos1JgHPPgiFaiZsS5VYfj_jEPSVOHdkOgnc8/edit#gid=68835384"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1472,
+        16
+      ],
+      "id": "fc7a4161-9cd6-4bd3-a6fd-808e6facf896",
+      "name": "Get watchlist",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0iw1dXgYp3t0XmZV",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const watchlistItems = $input.all();\nconst splitItems = $('Split industries').all();\n\nreturn splitItems.map((splitItem) => {\n  const split = splitItem.json;\n  \n  const matchedRow = watchlistItems.find(w => \n    w.json['Industry']?.toLowerCase() === split.topic?.toLowerCase()\n  );\n  const watchlist = matchedRow?.json || {};\n\n  const userCompanies = split.companies \n    ? split.companies.split(',').map(c => c.trim()) \n    : [];\n\n  const sheetCompanies = watchlist['Companies'] \n    ? watchlist['Companies'].split(',').map(c => c.trim()) \n    : [];\n\n  const allCompanies = [...new Set([...sheetCompanies, ...userCompanies])];\n  const trusted_sources = watchlist['Trusted Sources'] || 'techcrunch.com, reuters.com, bloomberg.com, wired.com';\n  const regulations = watchlist['Regulations'] || '';\n  const regulation_section_title = watchlist['Regulation Title'] || '';\n\n  return {\n    json: {\n      topic: split.topic,\n      email: split.email,\n      channel: split.channel,\n      trusted_sources,\n      regulations,\n      regulation_section_title,\n      companies: allCompanies.join(', '),\n      watchlist: `Industry: ${split.topic}. Companies: ${allCompanies.join(', ') || 'none'}. Regulations: ${regulations || 'none'}. Trusted sources: ${trusted_sources}.`\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1296,
+        0
+      ],
+      "id": "9d366f6c-35b6-4a9a-8947-8acc336893f8",
+      "name": "Merge watchlist"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "list",
+          "cachedResultName": "claude-haiku-4-5-20251001"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 6000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        32
+      ],
+      "id": "f23a1063-9c79-451f-8b98-43156b100021",
+      "name": "Claude digest",
+      "retryOnFail": true,
+      "waitBetweenTries": 5,
+      "credentials": {
+        "anthropicApi": {
+          "id": "GHGvo7qibNOiCmmA",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "490cc49d-07b7-48e2-9a79-21bf18c8ddab",
+              "leftValue": "={{ $json.channel }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        192,
+        176
+      ],
+      "id": "677e6bc8-4355-45b1-9d6a-851faefa161e",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1Gx0BT2B7QpQKD7AJ3Jb2XhB0gV-55rrSQsVUJp0wr8I",
+          "mode": "list",
+          "cachedResultName": "Digest Subscribers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Gx0BT2B7QpQKD7AJ3Jb2XhB0gV-55rrSQsVUJp0wr8I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Gx0BT2B7QpQKD7AJ3Jb2XhB0gV-55rrSQsVUJp0wr8I/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $json['Your email'] }}",
+            "Active": "no"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Slack channel",
+              "displayName": "Slack channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Industries",
+              "displayName": "Industries",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Active",
+              "displayName": "Active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1440,
+        208
+      ],
+      "id": "8fdd7f71-2ef6-472c-9d08-15b46f6a14c9",
+      "name": "Deactivate subscriber",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0iw1dXgYp3t0XmZV",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "Unsubscribe form",
+        "formDescription": "Unsubscribe from Weekly Digest",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Your email",
+              "fieldType": "email"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        1232,
+        208
+      ],
+      "id": "a3c2d19e-e766-48d6-a5d2-8801eb7fdb67",
+      "name": "Unsubscribe form",
+      "webhookId": "137d637e-73f7-4d31-a3a4-5c5e51acd059"
+    },
+    {
+      "parameters": {
+        "sendTo": "=={{ $('Unsubscribe form').first().json['Your email'] }}",
+        "subject": "You've been unsubscribed from Weekly Digest",
+        "emailType": "text",
+        "message": "Hi,  You've been successfully unsubscribed from the Market Digest weekly newsletter.  You will no longer receive weekly digests. If you'd like to resubscribe in the future, simply fill out the form again.  The Market Digest Team",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1648,
+        208
+      ],
+      "id": "991171bc-5ef9-4e88-969b-7a317cbc7e97",
+      "name": "Unsubscribe confirmation",
+      "webhookId": "466a7900-9c7f-4879-aab5-a52757ecd3dd",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QCZMsgq5N0ikVdvz",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## INPUTS - Subscribers and per‑industry config live in a Google Sheet. A weekly trigger kicks the workflow off Monday at 7 AM.",
+        "height": 928,
+        "width": 864
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2400,
+        -336
+      ],
+      "typeVersion": 1,
+      "id": "80d180b0-9cb2-40b2-b3a2-b3da429f7d10",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## SEARCH: For each industry, pulls ten recent articles from that industry's watchlist of trusted domains and regulators.",
+        "height": 928,
+        "width": 736
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1520,
+        -336
+      ],
+      "typeVersion": 1,
+      "id": "126fa896-31d8-4546-94ca-205559c1fd14",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## SYNTHESIS \n\nBuild prompt (Code node) — prompt is dynamic.Build prompt (Code node) — prompt is dynamic. It changes every run based on topic, watchlist, companies, regulations, search results, and date. A Code node lets you use JavaScript template literals and conditionals to build it. The Anthropic node's text field isn't designed for that complexity.\n\nTrusted domains in Tavily — include_domains comes from the watchlist which is looked up per industry at runtime. You can't hardcode it because it's different for FinTech vs FemTech vs a custom industry.\nShort version: anything dynamic belongs in a Code node. The API nodes are just the delivery mechanism.",
+        "height": 928,
+        "width": 640
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -752,
+        -336
+      ],
+      "typeVersion": 1,
+      "id": "04103377-b933-44e6-bed7-9f60adea2af1",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## DELIVER - Full HTML digest to inbox. Top story plus a nudge in Slack. Unsubscribe just flips a flag in the Sheet.",
+        "height": 928,
+        "width": 848
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -80,
+        -336
+      ],
+      "typeVersion": 1,
+      "id": "95be981d-d484-4c30-944b-746ac1665e5c",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## UNSUBSCRIBE"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1184,
+        16
+      ],
+      "typeVersion": 1,
+      "id": "4bd6aff9-8cf9-458b-bd36-49e42adfc7ac",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Delivery Error"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1168,
+        -688
+      ],
+      "typeVersion": 1,
+      "id": "8b5116a0-aec6-46ba-b14b-153174a14637",
+      "name": "Sticky Note5"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily search": {
+      "main": [
+        [
+          {
+            "node": "Bundle results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build prompt": {
+      "main": [
+        [
+          {
+            "node": "Claude digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract HTML": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bundle results": {
+      "main": [
+        [
+          {
+            "node": "Build prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Prepare subscriber",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split industries": {
+      "main": [
+        [
+          {
+            "node": "Get watchlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Split industries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare subscriber": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Split industries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get watchlist": {
+      "main": [
+        [
+          {
+            "node": "Merge watchlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge watchlist": {
+      "main": [
+        [
+          {
+            "node": "Tavily search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude digest": {
+      "main": [
+        [
+          {
+            "node": "Extract HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deactivate subscriber": {
+      "main": [
+        [
+          {
+            "node": "Unsubscribe confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsubscribe form": {
+      "main": [
+        [
+          {
+            "node": "Deactivate subscriber",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1b6de2a1-de1c-4cc9-898c-d07a8a55a580",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a4bbad2bd1f8622c7571a85bbc8536c30c18ef93a7ca5caf9e1c6218efd446da"
+  },
+  "id": "J2GIw3gj4VXYLUGN",
+  "tags": []
+}
